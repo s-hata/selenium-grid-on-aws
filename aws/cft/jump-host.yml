@@ -1,0 +1,126 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Jump Host Resources for Jump Host"
+Parameters:
+  ParentStackName:
+    Type: "String"
+  VpcId:
+    Type: "String"
+  SubnetId:
+    Type: "String"
+  KeyPairName:
+    Type: "String"
+  DefaultSecurityGroupId:
+    Type: "String"
+Mappings:
+  WinServer2016:
+    us-east-1:
+      "AMI": "ami-050202fb72f001b47"
+    us-east-2:
+      "AMI": "ami-028779930ada5200c"
+    us-west-1:
+      "AMI": "ami-08838e38cfe4854ad"
+    us-west-2:
+      "AMI": "ami-017bf00eb0d4c7182"
+    ap-south-1:
+      "AMI": "ami-0e9c4931f7c9d73f6"
+    ap-northeast-2:
+      "AMI": "ami-0c6a4d561b38c05ed"
+    ap-southeast-1:
+      "AMI": "ami-098731bcd06ea9ca6"
+    ap-southeast-2:
+      "AMI": "ami-0096a7a7add65af89"
+    ap-northeast-1:
+      "AMI": "ami-0134dae8964ea643c"
+    ca-central-1:
+      "AMI": "ami-04a4290c9c20574d9"
+    eu-central-1:
+      "AMI": "ami-06af8c775c56b30ca"
+    eu-west-1:
+      "AMI": "ami-0cd8a780065ea078f"
+    eu-west-2:
+      "AMI": "ami-0f5f78829606035fc"
+    eu-west-3:
+      "AMI": "ami-0152e5e7567b014fc"
+    sa-east-1:
+      "AMI": "ami-0c3faf6ff12a7f005"
+  Constraints:
+    EC2:
+      InstanceType: "t2.micro"
+Resources:
+  JumpHost:
+    Type: "AWS::EC2::Instance"
+    Properties:
+      ImageId: !FindInMap [ WinServer2016, !Ref "AWS::Region", AMI ]
+      InstanceType: !FindInMap [ Constraints, EC2, InstanceType ]
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: "true"
+          DeviceIndex: "0"
+          SubnetId: !Ref SubnetId
+          GroupSet:
+            - !Ref DefaultSecurityGroupId
+      KeyName: !Ref KeyPairName
+      IamInstanceProfile: !Ref InstanceProfile
+      Tags:
+        - Key: "Name"
+          Value: !Sub "${AWS::StackName}-Jump-Host"
+        - Key: "Owner"
+          Value: !Ref AWS::StackName
+      UserData:
+        Fn::Base64: !Sub |
+          <powershell>
+          echo "User Data Start..."
+          sleep 60
+          echo "  Download set up script..."
+          $url = ''
+          $script = (New-Object Net.WebClient).DownloadString($utl)
+          echo "  Execute the script($url)."
+          invoke-Expression("&{$script}")
+          echo "  CFn Signal Start..."
+          echo "    Stack    : ${AWS::StackName}"
+          echo "    Region   : ${AWS::Region}"
+          echo "    Resource : JumpHost"
+          cfn-signal.exe -e 0 --stack ${AWS::StackName} --resource JumpHost --region ${AWS::Region}
+          echo "  CFn Signal end."
+          echo "User Data End."
+          </powershell>
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: "PT30M"
+  InstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      Path: "/"
+      Roles:
+        - !Ref InstanceRole
+  InstanceRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "ec2.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: !Sub "${AWS::StackName}-jump-host-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              -
+                Effect: "Allow"
+                Action:
+                  - "s3:*"
+                  - "ec2:*"
+                  - "logs:*"
+                  - "cloudformation:*"
+                Resource: "*"
+Outputs:
+  JumpHostDNSName:
+    Value: !GetAtt [ "JumpHost", "PublicDnsName" ]
+  JumpHostPublicIp:
+    Value: !GetAtt [ "JumpHost", "PublicIp" ]

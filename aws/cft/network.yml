@@ -1,0 +1,132 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Network Resources for Selenium Grid"
+Parameters:
+  ParentStackName:
+    Type: String
+  VpcCidrBlock:
+    Type: String
+  PublicSubnetCidrBlock:
+    Type: String
+  PrivateSubnetCidrBlock:
+    Type: String
+Resources:
+  VPC:
+    Type: "AWS::EC2::VPC"
+    Properties:
+      CidrBlock: !Ref VpcCidrBlock
+      EnableDnsSupport: 'true'
+      EnableDnsHostnames: 'true'
+      InstanceTenancy: default
+      Tags:
+        - Key: "Name"
+          Value: "Selenium-Grid-VPC"
+        - Key: "Owner"
+          Value: !Ref AWS::StackName
+  PublicSubnet:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnetCidrBlock
+      AvailabilityZone: !Select ["0", !GetAZs { "Ref": "AWS::Region" }]
+      Tags:
+        - Key: "Name"
+          Value: "Selenium-Grid-Subnet"
+        - Key: "Owner"
+          Value: !Ref AWS::StackName
+  PrivateSubnet:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateSubnetCidrBlock
+      AvailabilityZone: !Select ["0", !GetAZs { "Ref": "AWS::Region" }]
+      Tags:
+        - Key: "Name"
+          Value: "Selenium-Grid-Subnet"
+        - Key: "Owner"
+          Value: !Ref AWS::StackName
+  InternetGateway:
+    Type: "AWS::EC2::InternetGateway"
+    Properties:
+      Tags:
+        - Key: "Name"
+          Value: "Selenium-Grid-InternetGateway"
+        - Key: "Owner"
+          Value: !Ref AWS::StackName
+  NatGatewayEIP:
+   Type: "AWS::EC2::EIP"
+   Properties:
+     Domain: vpc
+  NatGateway:
+    Type: "AWS::EC2::NatGateway"
+    Properties:
+      AllocationId: !GetAtt [ NatGatewayEIP, AllocationId ]
+      SubnetId: !Ref PublicSubnet
+  AttachInternetGateway:
+    Type: "AWS::EC2::VPCGatewayAttachment"
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+  PublicRouteTable:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: "Name"
+          Value: "Selenium-Grid-RouteTable"
+        - Key: "Owner"
+          Value: !Ref AWS::StackName
+  PublicRoute:
+    Type: "AWS::EC2::Route"
+    DependsOn: InternetGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref InternetGateway
+  PrivateRouteTable:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: !Ref VPC
+  PrivateRoute:
+    Type: "AWS::EC2::Route"
+    DependsOn: NatGateway
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: "0.0.0.0/0"
+      NatGatewayId: !Ref NatGateway
+  PublicSubnetRouteTableAssociation:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+  PrivateSubnetRouteTableAssociation:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      SubnetId: !Ref PrivateSubnet
+      RouteTableId: !Ref PrivateRouteTable
+  DefaultSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: "Default SecurityGroup for Win"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: "3389"
+          ToPort: "3389"
+          CidrIp: "0.0.0.0/0"
+Outputs:
+  VpcId:
+    Value: !Ref VPC
+  PublicSubnetId:
+    Value: !Ref PublicSubnet
+  PublicSubnetAvailabilityZone:
+    Value: !GetAtt PublicSubnet.AvailabilityZone
+  PublicSubnetCIDRBlock:
+    Value: !Ref PublicSubnetCidrBlock
+  PrivateSubnetId:
+    Value: !Ref PrivateSubnet
+  PrivateSubnetAvailabilityZone:
+    Value: !GetAtt PrivateSubnet.AvailabilityZone
+  PrivateSubnetCIDRBlock:
+    Value: !Ref PrivateSubnetCidrBlock
+  DefaultSecurityGroupId:
+    Value: !Ref DefaultSecurityGroup

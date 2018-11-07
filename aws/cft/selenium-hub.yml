@@ -1,0 +1,135 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Selenium Hub Resources for Selenium Grid"
+Parameters:
+  ParentStackName:
+    Type: "String"
+  VpcId:
+    Type: "String"
+  SubnetId:
+    Type: "String"
+  KeyPairName:
+    Type: "String"
+  DefaultSecurityGroupId:
+    Type: "String"
+Mappings:
+  WinServer2016:
+    us-east-1:
+      "AMI": "ami-050202fb72f001b47"
+    us-east-2:
+      "AMI": "ami-028779930ada5200c"
+    us-west-1:
+      "AMI": "ami-08838e38cfe4854ad"
+    us-west-2:
+      "AMI": "ami-017bf00eb0d4c7182"
+    ap-south-1:
+      "AMI": "ami-0e9c4931f7c9d73f6"
+    ap-northeast-2:
+      "AMI": "ami-0c6a4d561b38c05ed"
+    ap-southeast-1:
+      "AMI": "ami-098731bcd06ea9ca6"
+    ap-southeast-2:
+      "AMI": "ami-0096a7a7add65af89"
+    ap-northeast-1:
+      "AMI": "ami-0134dae8964ea643c"
+    ca-central-1:
+      "AMI": "ami-04a4290c9c20574d9"
+    eu-central-1:
+      "AMI": "ami-06af8c775c56b30ca"
+    eu-west-1:
+      "AMI": "ami-0cd8a780065ea078f"
+    eu-west-2:
+      "AMI": "ami-0f5f78829606035fc"
+    eu-west-3:
+      "AMI": "ami-0152e5e7567b014fc"
+    sa-east-1:
+      "AMI": "ami-0c3faf6ff12a7f005"
+  Constraints:
+    EC2:
+      InstanceType: "t2.micro"
+Resources:
+  SeleniumHub:
+    Type: "AWS::EC2::Instance"
+    Properties:
+      ImageId: !FindInMap [ WinServer2016, !Ref "AWS::Region", AMI ]
+      InstanceType: !FindInMap [ Constraints, EC2, InstanceType ]
+      SecurityGroupIds:
+        - !Ref DefaultSecurityGroupId
+        - !Ref SeleniumSecurityGroup
+      SubnetId: !Ref SubnetId
+      KeyName: !Ref KeyPairName
+      IamInstanceProfile: !Ref InstanceProfile
+      Tags:
+        - Key: "Name"
+          Value: !Sub "${ParentStackName}-Selenium-Hub"
+        - Key: "Owner"
+          Value: !Ref ParentStackName
+      UserData:
+        Fn::Base64: !Sub |
+          <powershell>
+          sleep 60
+          $script = (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/s-hata/selenium-grid-on-aws/master/aws/scripts/set-up-win.ps1')
+          invoke-Expression("&{$script}")
+          $script = (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/s-hata/selenium-grid-on-aws/master/aws/scripts/set-up-selenium-hub.ps1')
+          invoke-Expression("&{$script}")
+          cfn-signal.exe -e 0 --stack ${AWS::StackName} --resource SeleniumHub --region ${AWS::Region}
+          </powershell>
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: "PT30M"
+  InstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      Path: "/"
+      Roles:
+        - !Ref InstanceRole
+  InstanceRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "ec2.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: !Sub "${AWS::StackName}-selenium-hub-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              -
+                Effect: "Allow"
+                Action:
+                  - "s3:*"
+                  - "ec2:*"
+                  - "logs:*"
+                  - "cloudformation:*"
+                Resource: "*"
+  SeleniumSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      VpcId: !Ref VpcId
+      GroupDescription: "Default SecurityGroup"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: "4444"
+          ToPort: "4444"
+          CidrIp: "0.0.0.0/0"
+        - IpProtocol: tcp
+          FromPort: "5555"
+          ToPort: "5555"
+          CidrIp: "0.0.0.0/0"
+Outputs:
+  SeleniumHubPrivateIp:
+    Value: !GetAtt [ "SeleniumHub", "PrivateIp" ]
+  SeleniumHubConsole:
+    Value:
+      Fn::Sub:
+        - "http://${DNSName}:4444/grid/console"
+        - {
+            DNSName: !GetAtt [ "SeleniumHub", "PrivateDnsName" ]
+          }
