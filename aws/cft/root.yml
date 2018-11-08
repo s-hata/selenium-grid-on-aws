@@ -13,7 +13,6 @@ Mappings:
       Network: "selenium-grid-on-aws/aws/cft/network.yml"
       SeleniumHub: "selenium-grid-on-aws/aws/cft/selenium-hub.yml"
       SeleniumNode: "selenium-grid-on-aws/aws/cft/selenium-node.yml"
-      JumpHost: "selenium-grid-on-aws/aws/cft/jump-host.yml"
     Network:
       VpcCidrBlock: "192.168.1.0/24"
       PublicSubnetCidrBlock: "192.168.1.0/27"
@@ -52,7 +51,7 @@ Resources:
       Parameters:
         ParentStackName: !Ref AWS::StackName
         VpcId: !GetAtt Network.Outputs.VpcId
-        SubnetId: !GetAtt Network.Outputs.PrivateSubnetId
+        SubnetId: !GetAtt Network.Outputs.PublicSubnetId
         KeyPairName: !Ref KeyPairName
         DefaultSecurityGroupId: !GetAtt Network.Outputs.DefaultSecurityGroupId
   SeleniumNode:
@@ -69,29 +68,10 @@ Resources:
       Parameters:
         ParentStackName: !Ref AWS::StackName
         VpcId: !GetAtt Network.Outputs.VpcId
-        SubnetId: !GetAtt Network.Outputs.PrivateSubnetId
-        KeyPairName: !Ref KeyPairName
-        DefaultSecurityGroupId: !GetAtt Network.Outputs.DefaultSecurityGroupId
-        SeleniumHubIP: !GetAtt SeleniumHub.Outputs.SeleniumNodePrivateIp
-  JumpHost:
-    Type: "AWS::CloudFormation::Stack"
-    Properties:
-      TemplateURL:
-        Fn::Sub:
-          - "https://s3${Region}.amazonaws.com/${CFnTemplateBucketName}/${TemplatePath}"
-          - {
-              Region: !If [ IsUsEast1, "", !If [ IsUsEast2, ".${AWS::Region}", !Sub "-${AWS::Region}" ]],
-              TemplatePath: !FindInMap [ Constraints, CFt, JumpHost ]
-            }
-      TimeoutInMinutes: "30"
-      Parameters:
-        ParentStackName: !Ref AWS::StackName
-        VpcId: !GetAtt Network.Outputs.VpcId
         SubnetId: !GetAtt Network.Outputs.PublicSubnetId
         KeyPairName: !Ref KeyPairName
         DefaultSecurityGroupId: !GetAtt Network.Outputs.DefaultSecurityGroupId
+        SeleniumHubIP: !GetAtt SeleniumHub.Outputs.SeleniumHubPrivateIp
 Outputs:
-  JumpHostDNSName:
-    Value: !GetAtt JumpHost.Outputs.JumpHostDNSName
   SeleniumHubConsole:
     Value: !GetAtt SeleniumHub.Outputs.SeleniumHubConsole

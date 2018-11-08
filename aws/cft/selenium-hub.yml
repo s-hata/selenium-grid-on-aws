@@ -52,10 +52,13 @@ Resources:
     Properties:
       ImageId: !FindInMap [ WinServer2016, !Ref "AWS::Region", AMI ]
       InstanceType: !FindInMap [ Constraints, EC2, InstanceType ]
-      SecurityGroupIds:
-        - !Ref DefaultSecurityGroupId
-        - !Ref SeleniumSecurityGroup
-      SubnetId: !Ref SubnetId
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: "true"
+          DeviceIndex: "0"
+          SubnetId: !Ref SubnetId
+          GroupSet:
+            - !Ref DefaultSecurityGroupId
+            - !Ref SeleniumSecurityGroup
       KeyName: !Ref KeyPairName
       IamInstanceProfile: !Ref InstanceProfile
       Tags:
@@ -67,9 +70,7 @@ Resources:
         Fn::Base64: !Sub |
           <powershell>
           sleep 60
-          $script = (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/s-hata/selenium-grid-on-aws/master/aws/scripts/set-up-win.ps1')
-          invoke-Expression("&{$script}")
-          $script = (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/s-hata/selenium-grid-on-aws/master/aws/scripts/set-up-selenium-hub.ps1')
+          $script = (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/s-hata/selenium-grid-on-aws/non-secure/aws/scripts/set-up-selenium-hub.ps1')
           invoke-Expression("&{$script}")
           cfn-signal.exe -e 0 --stack ${AWS::StackName} --resource SeleniumHub --region ${AWS::Region}
           </powershell>
@@ -124,12 +125,14 @@ Resources:
           ToPort: "5555"
           CidrIp: "0.0.0.0/0"
 Outputs:
-  SeleniumHubPrivateIp:
-    Value: !GetAtt [ "SeleniumHub", "PrivateIp" ]
   SeleniumHubConsole:
     Value:
       Fn::Sub:
         - "http://${DNSName}:4444/grid/console"
         - {
-            DNSName: !GetAtt [ "SeleniumHub", "PrivateDnsName" ]
+            DNSName: !GetAtt [ "SeleniumHub", "PublicDnsName" ]
           }
+  SeleniumHubPrivateIp:
+    Value: !GetAtt [ "SeleniumHub", "PrivateIp" ]
+  SeleniumHubPublicIp:
+    Value: !GetAtt [ "SeleniumHub", "PublicIp" ]
